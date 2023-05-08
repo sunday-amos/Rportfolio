@@ -1,0 +1,232 @@
+---
+title: "An online UK based Delivery Company Analysis"
+author: "Sunday Amos"
+date: "3/25/2023"
+output: html_document
+toc: yes
+toc_float: yes
+---
+# Introduction
+The analyst will be introduced to a fictional company that wants to analyse a management problem
+using data analytics. they will analyse a dataset and visualize the current performance of the
+company. The analyst is required to write a report to the Board of Directors demonstrating their ability to analyse, visualize, and evaluate a performance management problem. The report should propose a
+performance dashboard and include visualizations that lead to recommendations.
+
+
+## Ask phase
+
+Analyse the parcel orders of a prominent online retailer and derive
+recommendations for actions to improve a key performance target for the organisation. In addition,
+you should provide a dashboard based on your analysis. The dashboard should be calibrated on the
+provided historical data.
+
+### Key question that will guide the analysis
+
+1. what are some trends in parcel delivery
+2. how could these trends influence company's performance
+3. how could the company perform better in its delivery services
+
+## Preparation Phase
+
+There are two historical datasets used in this analysis, the parcel dataset and drivers dataset 
+
+
+### Variable definition in parcel data
+* driver id: a generated driver identifier number.
+* promotion purchase: indicates if the parcel was purchased from a promotion.
+* priority delivery: an indicator revealing if a parcel was given priority delivery.
+* parcel payment: an indicator revealing the payment method for the parcel.
+* parcel value: indicates the value of the parcel in £’s.
+* parcel status: indicates the status on the parcel manifest (delivered, lost, returned).
+* parcel arrival: indicates the scheduled parcel destination arrival (same-day, or between 1 to 5 days late).
+* parcel returned: indicator revealing whether a parcel was returned by the customer.
+* time of delivery: indicates the time of delivery of the parcel (morning, afternoon, evening).
+
+### Variable definition in driver data
+
+* driver id:  a generated driver identifier number.
+* gender: indicates the driver's gender.
+* experience: indicates the years of driving experience.
+* delivery location indicates the location of parcel delivery (rural or urban).
+* van type: indicates the type of van used for delivery (small, medium, large).
+* work pattern: indicates the work status of the driver (zero-hour contract, part-time, full-time).
+
+
+we would would use R-studio for this analysis by first loadings this packages using the library function
+```{r loading packages, echo=TRUE, warning=FALSE}
+library(tidyverse)
+library(skimr)
+library(readxl)
+library(RColorBrewer)
+library(gridExtra)
+```
+
+### setting working directory and importing dataset
+ 
+ 
+ import and view the dataset using the read_excel function
+```{r loading dataset, echo=TRUE}
+parcel <- read_excel("C:/Users/Kissinger/Desktop/Excel_Analysis/Case study/parcel_74.xlsx")
+driver <- read_excel("C:/Users/Kissinger/Desktop/Excel_Analysis/Case study/driver_74.xlsx")
+View(driver)
+
+View(parcel)
+
+```
+ ## Process Phase
+ 
+ Now we would be look pretty closely at the data to check for missing values, duplicates, inconsistencies, extra_spaces, mis_spellings using glimpse and skim functions 
+ 
+```{r}
+glimpse(driver)
+skim(driver)
+glimpse(parcel)
+skim(parcel)
+```
+after seen some missing values, inconsistency in the data set, we would be joining both dataset to have a comprehensive view of our dataset by first of all comparing both driver_id column to know the type of join to use
+
+```{r}
+sort(unique(driver$driver_id))
+sort(unique(parcel$driver_id))
+```
+now using inner join to join join both dataset
+```{r}
+joined_table <- inner_join(driver,parcel, by = "driver_id", multiple = "all")
+View(joined_table)
+```
+### Data cleaning
+
+Remove the select column, empty cells, and rows based on specific conditions based on their inconsistencies
+
+```{r}
+cleaned_tab <- joined_table %>% 
+  select(-select) %>% 
+  drop_na() %>% 
+  filter(parcel_returned >= 0, time_of_delivery != "kiss", parcel_status != "drowned")
+```
+
+we would like to add a new column to our dataset with parcel_arrived = 0 as same day delivery and from 1 to 5 as late delivery
+```{r}
+final_data <- cleaned_tab %>% 
+  mutate(parcel_arrive = case_when(parcel_arrived == 0 ~ "same day delivery", parcel_arrived > 0 ~ "late delivery"))
+View(final_data)
+
+```
+ summary of the cleaned dataset
+```{r}
+summary(final_data)
+skim(final_data)
+```
+## Analyze Phase
+
+Starting to explore our data, we want to see the individual count of the parcel_status
+```{r}
+parcel_stats <- final_data %>% 
+    group_by(parcel_status) %>% 
+  summarize(count_parcel_status = n())
+
+parcel_stats
+```
+we noticed a higher amount of parcel have been returned to the warehouse and less parcels were delivered compared to the lost parcels which has higher count. we will proceed to see why there are more parcel returned to the warehouse
+
+parcel returned grouped by experience
+```{r}
+years_of_experience <- final_data %>% 
+  group_by(experience) %>% 
+  summarise(count_parcel_ret = sum(parcel_returned))
+
+years_of_experience
+
+```
+ 
+now we noticed the employee with lesser experience is seen to have more parcel returned to the warehouse than employee with more experience who has less parcel returned back to the warehouse
+
+
+parcel returned grouped by work pattern
+```{r}
+pattern_work <- cleaned_tab %>% 
+  group_by(work_pattern) %>% 
+  summarise(sum_parcel_ret = sum(parcel_returned))
+pattern_work
+
+```
+we also noticed from our analysis that from the work pattern, zero hours contract employees has less parcel returned compared with full time and part time. It is possible that zero hours contract employees are doing great compared to other work pattern
+
+number of parcel delivered grouped by parcel arrive and priority delivery
+```{r}
+final <- final_data %>% 
+  group_by(parcel_arrive, priority_delivery) %>% 
+  summarise(parcel_delivery = n() )
+final
+```
+
+we can see from this analysis that either late or same day delivery has the highest priority parcel delivered while standard delivery which are not marked as priority has less. therefore we can say that customers of this delivery company often opt in for priority delivery than standard delivery.
+
+
+parcel_delivery time summary
+```{r}
+parcel_delivery <- final_data %>%  
+  group_by(time_of_delivery) %>% 
+  summarise(count_delivery = n())
+parcel_delivery
+```
+we can also conclude from this analysis that parcels delivered in the morning is the best time of delivery followed by evening but less deliveries were made in the afternoon. this could be due to the fact that customers are likely to be at work in the afternoon but are available at home in the morning or evening
+
+# Share and Act Phase
+ Now let us Share this insights with our stakeholders and board of directors explicitly using visualizations
+ 
+1. Parcel status bar chart
+```{r}
+parcel <- ggplot(data = final_data) + geom_bar(mapping = aes(x = parcel_status, fill = parcel_status)) + 
+  scale_fill_manual(values = c("green", "red", "yellow")) + 
+  labs(title = "Parcel Status", x = "parcel_status" , y = "total") +
+  theme(panel.background = element_blank(), axis.text.x = element_blank(), axis.ticks = element_blank(), plot.title = element_text(size = 11, color = "blue", hjust = 0.5)  )
+
+parcel
+```
+2. Parcel delivery against parcel arrive graph
+```{r}
+priority_del <- ggplot(data = final_data ) + geom_bar(mapping = aes(x = priority_delivery,fill = priority_delivery)) +
+  labs(title = "priority delivery") + 
+  scale_fill_manual(values = c("red", "green")) +
+  theme(panel.background = element_blank(), axis.text.x = element_blank(), axis.ticks = element_blank(), plot.title = element_text(size = 11, color = "blue", hjust = 0.5) )
+
+priority_del
+```
+3.Parcel returned against experience
+```{r}
+experience <- ggplot(data = years_of_experience)  + geom_point(mapping = aes(x = experience , y = count_parcel_ret)) + 
+  geom_smooth(mapping = aes(x = experience, y = count_parcel_ret), fill= NA) + labs(title = "Returned_parcel against experience") + 
+  theme(panel.background = element_blank(), plot.title = element_text(size = 11, color = "blue", hjust = 0.5))
+
+experience
+
+```
+4.Parcel returned against employees work pattern
+```{r}
+work_pattern <- ggplot(data = pattern_work) + geom_bar(mapping = aes(x = "", y = sum_parcel_ret, fill = work_pattern), position = "dodge", width = 1, stat = "identity") + 
+  scale_fill_manual(values = c("red", "green", "yellow")) + labs(title = "work pattern against count of parcel returned", x = "work pattern") + 
+  theme(panel.background = element_blank(), plot.title =  element_text(size=11, color= "red", hjust = 0.5))
+
+work_pattern
+```
+
+ 5.Parcel time of delivery
+```{r}
+time_delivery <- ggplot(data = parcel_delivery ) + geom_col(mapping = aes(x = time_of_delivery, y = count_delivery, fill = time_of_delivery)) +
+  scale_fill_manual(values = c("red", "green", "yellow")) + labs(title = "parcel arrived against time of delivery", x = "parcel arrived") + 
+  theme(panel.background = element_blank(),  plot.title =  element_text(size=11, color= "red", hjust = 0.5))
+
+time_delivery
+```
+ 
+ 
+ 
+ 
+ ###RECOMMENDATION
+ 
+ 1. From the analysis, the company should employ staff with more experience to reduce parcel return rate
+ 2. zero hour work pattern should be highly considered and maintained rather than full time or part time work pattern
+ 3. since customers are likely to be at home in the morning or evenings after work, parcels should be delivered withing this times instead of afternoon
+ 4. since customers often opt in for priority delivery's, more attention should be focused on priority orders
+ 
