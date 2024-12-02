@@ -89,7 +89,7 @@ after seen some missing values, inconsistency in the data set, we would be joini
 sort(unique(driver$driver_id))
 sort(unique(parcel$driver_id))
 ```
-now using inner join to join join both dataset
+now using inner join to join both dataset
 ```{r}
 joined_table <- inner_join(driver,parcel, by = "driver_id", multiple = "all")
 View(joined_table)
